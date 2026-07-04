@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>初回薬歴作成支援</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+<meta name="theme-color" content="#f2f2f7">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#f2f2f7;--card:#ffffff;--blue:#007aff;--blue-bg:rgba(0,122,255,.07);
+  --green:#34c759;--red:#ff3b30;--orange:#ff9500;--yellow:#ffcc00;
+  --p1:#1c1c1e;--p2:#636366;--p3:#c7c7cc;
+  --sep:rgba(60,60,67,.12);--fill:#f2f2f7;--inset:#e5e5ea;
+  --r:14px;--rsm:10px;
+  --shadow-xs:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.04);
+  --shadow-sm:0 2px 8px rgba(0,0,0,.08),0 1px 3px rgba(0,0,0,.05);
+  --shadow-md:0 8px 24px rgba(0,0,0,.10),0 2px 6px rgba(0,0,0,.06);
+  --shadow-lg:0 16px 48px rgba(0,0,0,.14),0 4px 12px rgba(0,0,0,.08);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic UI',sans-serif;
+  background:var(--bg);color:var(--p1);font-size:14px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;}
+
+/* Navbar */
+.nav{background:rgba(248,248,252,.88);backdrop-filter:saturate(180%) blur(20px);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:1px solid rgba(60,60,67,.08);min-height:56px;display:flex;align-items:center;
+  justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:50;flex-wrap:wrap;gap:6px;}
+.nav-title{font-size:17px;font-weight:600;letter-spacing:-.3px;}
+.icon-btn{width:36px;height:36px;border-radius:50%;border:none;background:rgba(118,118,128,.12);
+  color:var(--p1);font-size:16px;cursor:pointer;display:flex;align-items:center;
+  justify-content:center;transition:background .2s,transform .15s;}
+.icon-btn:hover{background:rgba(118,118,128,.2);}
+.icon-btn:active{transform:scale(.94);}
+
+.content{max-width:1400px;margin:0 auto;padding:16px 12px calc(100px + env(safe-area-inset-bottom));}
+
+/* Card */
+.card{background:var(--card);border-radius:var(--r);overflow:hidden;margin-bottom:16px;
+  box-shadow:var(--shadow-xs);}
+.sec-label{font-size:11px;font-weight:600;color:var(--p2);text-transform:uppercase;
+  letter-spacing:.6px;padding:0 4px 10px;display:block;}
+
+/* Buttons */
+.btn{padding:8px 16px;border-radius:var(--rsm);border:none;font-size:14px;font-weight:500;
+  cursor:pointer;transition:all .18s cubic-bezier(.4,0,.2,1);font-family:inherit;letter-spacing:-.1px;}
+.btn:active{transform:scale(.97);}
+.btn-primary{background:var(--blue);color:#fff;
+  box-shadow:0 1px 4px rgba(0,122,255,.3),0 1px 2px rgba(0,122,255,.2);}
+.btn-primary:hover{background:#0070eb;}
+.btn-primary:disabled{background:var(--p3);box-shadow:none;cursor:not-allowed;transform:none;}
+.btn-secondary{background:rgba(118,118,128,.12);color:var(--p1);}
+.btn-secondary:hover{background:rgba(118,118,128,.18);}
+.btn-ghost{background:transparent;color:var(--blue);padding:6px 10px;font-weight:500;}
+.btn-ghost:hover{background:var(--blue-bg);}
+.btn-danger{background:transparent;color:var(--red);padding:6px 10px;}
+.btn-danger:hover{background:rgba(255,59,48,.08);}
+.btn-sm{padding:5px 12px;font-size:13px;}
+.btn-full{width:100%;padding:14px;font-size:15px;font-weight:600;border-radius:var(--r);}
+.btn-primary:disabled,.btn-secondary:disabled{opacity:.5;cursor:not-allowed;}
+
+/* Form */
+.form-group{margin-bottom:14px;}
+.form-label{font-size:12px;font-weight:500;color:var(--p2);margin-bottom:6px;
+  display:flex;justify-content:space-between;align-items:center;letter-spacing:.1px;}
+textarea,input[type=text],input[type=password]{
+  width:100%;padding:10px 13px;border:1px solid var(--sep);border-radius:var(--rsm);
+  font-size:14px;font-family:inherit;color:var(--p1);background:var(--card);
+  resize:vertical;line-height:1.6;outline:none;
+  transition:border-color .18s,box-shadow .18s;box-shadow:var(--shadow-xs);}
+textarea:focus,input:focus{border-color:var(--blue);box-shadow:0 0 0 3.5px rgba(0,122,255,.14),var(--shadow-xs);}
+
+/* Dropzone */
+.dropzone{border:2px dashed var(--inset);border-radius:var(--r);padding:28px 16px;
+  text-align:center;color:var(--p2);cursor:pointer;transition:all .22s;}
+.dropzone:hover,.dropzone.over{border-color:var(--blue);background:var(--blue-bg);color:var(--blue);}
+.dz-icon{font-size:28px;margin-bottom:6px;}
+.dz-title{font-size:14px;font-weight:600;margin-bottom:4px;}
+.dz-sub{font-size:11px;color:var(--p3);}
+
+/* Modal */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;
+  align-items:center;justify-content:center;z-index:100;padding:20px;
+  backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);}
+.modal{background:var(--card);border-radius:20px;width:100%;max-width:560px;
+  max-height:88vh;overflow-y:auto;box-shadow:var(--shadow-lg);}
+.modal-hd{padding:20px 20px 15px;border-bottom:1px solid var(--sep);
+  display:flex;justify-content:space-between;align-items:center;}
+.modal-title{font-size:17px;font-weight:700;letter-spacing:-.3px;}
+.modal-body{padding:20px;}
+.modal-ft{padding:15px 20px;border-top:1px solid var(--sep);
+  display:flex;gap:8px;justify-content:flex-end;}
+
+/* Toast */
+.toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%) translateY(4px);
+  background:rgba(28,28,30,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  color:#fff;padding:10px 20px;border-radius:22px;font-size:13px;font-weight:500;
+  z-index:200;opacity:0;pointer-events:none;
+  transition:opacity .22s,transform .22s cubic-bezier(.4,0,.2,1);white-space:nowrap;
+  box-shadow:var(--shadow-md);}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* Spinner */
+.spin{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.35);
+  border-top-color:#fff;border-radius:50%;animation:spin .55s linear infinite;}
+.spin-blue{border:2px solid rgba(0,122,255,.2);border-top-color:var(--blue);}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Error / Alert */
+.err{background:rgba(255,59,48,.07);border:1px solid rgba(255,59,48,.2);color:#c0392b;
+  padding:11px 14px;border-radius:var(--rsm);font-size:13px;margin-bottom:12px;line-height:1.5;}
+.alert-yellow{background:#fffbea;border:1px solid #f0c040;color:#7a5c00;
+  padding:14px 16px;border-radius:var(--r);margin-bottom:16px;box-shadow:var(--shadow-xs);}
+.alert-yellow-title{font-weight:700;font-size:14px;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.alert-yellow ul{padding-left:20px;line-height:1.8;font-size:13px;}
+.alert-orange{background:#fff4e5;border:1px solid var(--orange);color:#95610a;
+  padding:12px 16px;border-radius:var(--r);margin-bottom:16px;font-size:13px;
+  display:flex;justify-content:space-between;align-items:center;gap:10px;box-shadow:var(--shadow-xs);}
+
+/* Utils */
+.flex-bc{display:flex;justify-content:space-between;align-items:center;}
+.flex-c{display:flex;align-items:center;}
+.gap-8{gap:8px;}
+.mt-8{margin-top:8px;}
+.mt-12{margin-top:12px;}
+.text-sm{font-size:13px;}
+.text-xs{font-size:12px;}
+.text-p2{color:var(--p2);}
+.w100{width:100%;}
+
+/* Toggle switch */
+.sw{position:relative;width:44px;height:26px;flex-shrink:0;}
+.sw input{display:none;}
+.sw-track{position:absolute;inset:0;background:var(--inset);border-radius:13px;
+  cursor:pointer;transition:background .22s cubic-bezier(.4,0,.2,1);}
+.sw input:checked+.sw-track{background:var(--green);}
+.sw-thumb{position:absolute;top:3px;left:3px;width:20px;height:20px;
+  background:#fff;border-radius:50%;
+  box-shadow:0 2px 6px rgba(0,0,0,.18),0 1px 2px rgba(0,0,0,.12);
+  transition:transform .22s cubic-bezier(.4,0,.2,1);pointer-events:none;}
+.sw input:checked~.sw-thumb{transform:translateX(18px);}
+
+/* Badges */
+.badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;white-space:nowrap;letter-spacing:.1px;}
+.badge-req{background:rgba(255,149,0,.15);color:#95610a;}
+.badge-warn{background:rgba(255,59,48,.12);color:#c0392b;}
+
+/* ===== Layout: 3 zones ===== */
+.main-layout{display:flex;gap:16px;align-items:flex-start;}
+.source-pane{flex:0 0 38%;min-width:0;position:sticky;top:70px;max-height:calc(100vh - 90px);
+  overflow-y:auto;transition:flex-basis .2s;}
+.source-pane.collapsed{flex:0 0 44px;}
+.preview-pane{flex:1;min-width:0;}
+
+.source-collapsed-bar{writing-mode:vertical-rl;background:var(--card);border-radius:var(--r);
+  padding:16px 8px;box-shadow:var(--shadow-xs);cursor:pointer;text-align:center;font-size:13px;
+  font-weight:600;color:var(--p2);height:200px;display:flex;align-items:center;justify-content:center;}
+
+.source-header{display:flex;justify-content:space-between;align-items:center;padding:2px 4px 10px;}
+.file-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+.file-tab{padding:5px 12px;border-radius:20px;border:1.5px solid var(--sep);background:var(--card);
+  color:var(--p1);font-size:12px;cursor:pointer;font-weight:500;max-width:140px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:4px;}
+.file-tab.sel{background:var(--blue);color:#fff;border-color:var(--blue);}
+.file-tab .rm{opacity:.7;font-weight:700;}
+.file-tab .rm:hover{opacity:1;}
+
+.viewer-box{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow-xs);
+  padding:12px;text-align:center;min-height:200px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;}
+.viewer-box img{max-width:100%;max-height:70vh;border-radius:8px;}
+.viewer-box canvas{max-width:100%;height:auto;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,.12);}
+.pdf-nav{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:10px;}
+
+/* Preview blocks */
+.block-card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow-xs);
+  padding:14px 16px;margin-bottom:14px;}
+.block-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.block-title{font-size:14px;font-weight:700;color:var(--p1);}
+.block-note{font-size:11px;color:var(--p3);margin-top:4px;}
+.block-fixnote{font-size:11px;color:var(--orange);margin-top:6px;background:rgba(255,149,0,.08);
+  padding:5px 9px;border-radius:8px;display:inline-block;}
+.block-manual-badge{font-size:10px;color:var(--blue);background:var(--blue-bg);
+  padding:2px 8px;border-radius:10px;font-weight:600;}
+
+/* OP problem cards */
+.op-card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow-xs);
+  margin-bottom:12px;overflow:hidden;transition:opacity .2s;}
+.op-card.off{opacity:.5;background:var(--fill);}
+.op-card-hd{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--sep);}
+.op-card-title{flex:1;font-size:13px;font-weight:700;color:var(--p1);}
+.op-card-body{padding:10px 14px;}
+.op-card-body textarea{font-size:13px;line-height:1.8;min-height:80px;}
+
+/* Copy bar */
+.copy-bar{position:fixed;bottom:0;left:0;right:0;
+  background:rgba(248,248,252,.94);backdrop-filter:saturate(180%) blur(20px);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  border-top:1px solid rgba(60,60,67,.08);
+  padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+  display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;z-index:60;}
+.excluded-note{font-size:11px;color:var(--orange);font-weight:600;margin-left:6px;}
+
+/* Knowledge suggestion card (non-modal) */
+.ks-card{background:#eef7ff;border:1px solid #a9d4ff;border-radius:var(--r);
+  padding:14px 16px;margin-bottom:14px;box-shadow:var(--shadow-xs);}
+.ks-card-title{font-size:12px;font-weight:700;color:#0058b0;margin-bottom:8px;}
+.ks-item{background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:13px;}
+.ks-item-actions{display:flex;gap:8px;margin-top:8px;}
+
+/* Knowledge manager list */
+.kd-item{border:1px solid var(--sep);border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+.kd-item-hd{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+.kd-tag{font-size:11px;color:var(--blue);font-weight:700;}
+.kd-drug{font-size:11px;color:var(--p2);}
+
+/* Mobile tabs */
+.mobile-tabs{display:none;gap:8px;margin-bottom:12px;}
+.mobile-tab-btn{flex:1;padding:9px;border-radius:var(--rsm);border:1.5px solid var(--sep);
+  background:var(--card);font-size:13px;font-weight:600;cursor:pointer;color:var(--p2);}
+.mobile-tab-btn.sel{background:var(--blue);color:#fff;border-color:var(--blue);}
+
+.loading-inline{display:flex;align-items:center;gap:10px;justify-content:center;
+  padding:20px;color:var(--blue);font-size:14px;font-weight:500;}
+
+@media (max-width:820px){
+  .main-layout{flex-direction:column;}
+  .source-pane{position:static;max-height:none;flex-basis:auto !important;width:100%;}
+  .source-pane.collapsed .source-body{display:none;}
+  .source-collapsed-bar{display:none;}
+  .mobile-tabs{display:flex;}
+  .main-layout.tab-source .preview-pane{display:none;}
+  .main-layout.tab-preview .source-pane{display:none;}
+}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/plain" id="app-source">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ══════════════════════════════════════════════════════════════
+// 定数
+// ══════════════════════════════════════════════════════════════
+const LS_API_KEY   = 'shokai_yakureki_api_key';
+const LS_KNOWLEDGE = 'knowledge-db';
+const MODEL = 'claude-sonnet-5';
+
+const SYSTEM_PROMPT_BASE = `あなたは施設在宅専門の高度な薬学的知見を持つ薬剤師として、新規入所患者の初回薬歴をSOAP形式で作成します。
+提供された書類（診療情報提供書・退院時看護サマリー・検査結果・薬剤情報・入居判定シート等）を読み取り、以下のルールに厳密に従って薬歴を作成してください。
+
+════════════════════════
+【出力形式の絶対ルール】
+════════════════════════
+1. ##S##、##O##、##A##、##EP##、##OP## の順で出力する。
+2. 各ブロック間は空行2行で区切る。
+3. 各ブロック内には空行を一切入れない（改行のみ。空の行を作らない）。
+   これは##S##・##O##・##A##・##EP##・##OP##すべてに適用する。
+4. 日付・年号はすべて元号略号（S/H/R）で統一する。
+   昭和→S、平成→H、令和→R
+   例：2026年6月1日→R8.6.1、1986年→S61年
+   既往歴・経過・検査日付・処方日付など、書類上西暦のものもすべて変換する。
+5. 検査値に（L）（H）等の基準値外表記は一切付けない。数値のみ記載する。
+6. 薬歴本文の末尾に、確認事項がある場合のみ「★確認事項★」ブロックを付ける
+   （後述。ツール側で本文と分離して表示するため、必ず本文の後に独立して出力）。
+
+════════════════════════
+【各項目のルール】
+════════════════════════
+
+■ ##S##
+タイトルのみ返す。中身は空欄（訪問時に本人・家族の発言を記入するため）。
+
+■ ##O##
+以下の順序で記載する。
+1. 【ENT処方】発信元医療機関名・科・担当医名を冒頭に記載
+   書式：「・薬剤名 規格　1T1×用法」（2T2×、3T3×、1C1×等で統一）
+   記載順：定期薬→頓用（約束指示含む）→注射・点滴→外用
+   BSC方針の場合、約束指示の頓用薬は用法・間隔・回数上限まで記載する。
+2. 【L/D】採取日を元号略号で明記
+   転記する検査値は薬学的に意義のあるものに絞る。基本セット：
+   Hb・WBC・Plt／Alb・TP／BUN・Cre・eGFR・K・Na／
+   AST・ALT・ALP・T-Bil／CRP／HbA1c・血糖（DM患者）／
+   BNP・NT-proBNP（心疾患患者）／腫瘍マーカー（癌患者）
+   上記以外は薬学的に特記すべき場合のみ記載する。
+   経時変化が薬学的に重要な場合は複数時点を併記してよい。
+3. 【経過】日付（元号略号）付きで時系列に記載
+4. 既往：簡潔に1行で記載
+基本情報（身長体重・家族構成・ADL詳細）は薬学的に重要な場合を除き省く。
+
+■ ##A##
+OPの＃プロブレクの中から最大3つを選ぶ（該当が少なければ2つや1つでも可）。
+書式：「＃●●　→　現状の評価＋今後の見通しを1行で（先読み型）」
+先読み型の例：「現時点でオピオイド無し。今後導入された時には注意」
+長くしない。薬の効果・副作用に関する内容を必ず含める。
+
+■ ##EP##
+1〜2文の実務的な薬学的指導内容。本人に話しかける形で書く。
+薬の効果・副作用に必ず触れる。
+禁止：「このまま続けましょう」等の内容のない指導、リハビリのみの話、
+「安定していて安心しました」等の気持ちの言葉。
+本人未告知の場合は病名・予後・余命に触れない表現にする。
+
+■ ##OP##
+プロブレム別（＃）に記載する。各＃に含める要素：
+・診断・経過の要点（日付は元号略号）
+・治療薬（該当する場合）
+・★〜★でフォロー事項＝この治療について今後どう評価していくかの薬学的視点
+必ず盛り込む視点：
+・減薬/必要性検討（例：血圧低下予想で降圧薬の必要性検討、大きい錠剤は必要性検討、
+　補正値正常化した電解質製剤の中止検討）
+・先読みの注意（例：DM既往ありオランザピン処方時注意）
+・BSC・緩和ケア方針の場合は明記
+・本人未告知の場合はOP冒頭の＃に「本人へは病名未告知」と明記し、
+　発言への配慮を★で促す
+・抗凝固薬・輸血禁忌（抗E抗体等）など安全上重要な情報はOPの冒頭近くに記載
+OPの最後に以下を付ける：
+【訪問予定】
+次回訪問日：
+訪問頻度：
+
+════════════════════════
+【オピオイド使用患者への必須追加項目】
+════════════════════════
+処方にオピオイド系薬剤（モルヒネ・オキシコドン・ヒドロモルフォン・フェンタニル・
+タペンタドール・トラマドール・アンペック・オプソ・ナルサス・ナルラピド等）が
+含まれる場合、OPのオピオイド関連＃の直後に以下を一字一句この形で必ず挿入する：
+
+＃がん性疼痛、医療用麻薬使用状況
+　①麻薬の保管管理状況：施設で管理
+　②服薬状況：今回初回介入。次回以降で評価
+　③レスキューの残薬状況等：
+　⑤疼痛緩和等の状況：介入時は問題なし。
+　⑥継続又は増量投与による体調の変化：今回初回介入。次回以降で評価
+　⑦残薬の廃棄方法：原則保険薬局へ返納するよう説明
+
+※③は空欄のまま出力（訪問時に記入）。④は存在しない（欠番のまま）。
+※これは加算の算定要件であり、絶対に省略しない。
+
+════════════════════════
+【OPに盛り込む薬学的チェックポイント】
+════════════════════════
+■ オピオイド
+・現時点で無し→今後導入時の注意を先回りで記載
+・レスキュー使用頻度増→定期投与への切替提案を★に
+・腎機能低下時：モルヒネは活性代謝物蓄積に注意。オキシコドン・ヒドロモルフォンを考慮
+■ DAPT（抗血小板薬2剤併用）
+・終了時期の目安（例：PCI後半年でアスピリン終了）が指示されていれば必ずOPに明記
+・消化管出血・皮下出血・黒色便のモニタリングを★に
+■ 抗凝固薬（DOAC等）
+・出血傾向の観察。腎機能に応じた用量確認
+・アバスチン等出血リスク薬との併用時は特に注意を明記
+■ 利尿薬・降圧薬
+・終末期・食事量低下時は必要性検討を★に
+・電解質（K・Na）変動、脱水に注意
+■ 睡眠薬・抗不安薬
+・BZ系・Z drug（ゾルピデム等）→転倒・せん妄リスク
+・オレキシン受容体拮抗薬（デエビゴ等）→悪夢・幻覚様体験・夜間の混乱に注意
+・多剤併用時は減薬の必要性検討を★に
+■ 化学療法中
+・イリノテカン→下痢対策に半夏瀉心湯は必須。腸内を酸性にする食品
+　（ヨーグルト・乳酸菌製剤等）で下痢増悪の恐れあり、注意を明記
+・アバスチン→高血圧・出血・蛋白尿・創傷治癒遅延
+・骨髄抑制→発熱等感染徴候の早期発見
+・治療ライン・効果判定予定日が分かれば記載
+■ SGLT2阻害薬
+・脱水リスク、水分摂取励行。尿路・性器感染症に注意
+■ SSRI（セルトラリン等）
+・低Na血症（SIADH）の可能性。Na低値があれば関連を考慮し★に
+■ 腎機能低下時の注意薬剤
+・メトホルミン：eGFR30未満で中止検討
+・腎排泄性抗菌薬・DOAC：用量調整の確認
+■ 電解質補正薬
+・アスパラK等の大きい錠剤→嚥下面からも必要性検討
+・補正値が基準内に戻っていれば中止検討を★に
+■ 嚥下機能低下（とろみ食・ミキサー食・嚥下障害の記載がある患者）
+・大きい錠剤・カプセルの剤形変更検討（OD錠・粉砕可否・液剤）を★に
+・粉砕禁忌薬剤（徐放錠：オキシコンチンTR・ニフェジピンCR等、腸溶錠）が
+　含まれる場合は必ず★で明示
+■ 外用薬
+・亜鉛華軟膏・アズノール→褥瘡・IADの部位・程度の確認を★に
+・ステロイド外用→長期使用による皮膚萎縮・感染に注意
+■ 漢方薬
+・半夏瀉心湯：イリノテカン下痢予防／牛車腎気丸：神経障害性疼痛・しびれ／
+　補中益気湯：悪液質・食欲不振
+
+════════════════════════
+【★確認事項★ブロック】
+════════════════════════
+以下に該当する事項があれば、薬歴本文の後（空行2行あけて）に
+「★確認事項★」として箇条書きで列挙する。無ければブロック自体を出力しない。
+・判読困難な薬剤名・用量（推測で補完せず「★原本要確認★」とし、本文該当箇所にも明記）
+・傷病名と処方内容の不一致（例：高血圧既往があるのに降圧薬なし→記載漏れか中止か病院確認）
+・禁忌・アレルギー・輸血禁忌情報（抗E抗体等）に関わる事項
+・施設での対応可否の確認が必要な処置（CV管理・NPPV・HOT・輸血等）
+・DAPT終了時期・効果判定日など、期日管理が必要な事項`;
+
+const KNOWLEDGE_SUGGESTION_INSTRUCTION = `
+
+════════════════════════
+【今回の症例からのナレッジ提案】
+════════════════════════
+上記の薬歴本文・確認事項をすべて出力した後、今回の症例から今後の薬歴作成に汎用的に役立つ薬学的知見
+（今回の患者固有の情報ではなく、他の患者にも応用できる知見）があれば、最後に以下の形式で追加する。
+無ければこのブロック自体を出力しない。
+★ナレッジ提案★
+・[カテゴリ] [薬剤名]：内容
+（1行1件。複数可）`;
+
+const OPIOID_KEYWORDS = ['モルヒネ','オキシコ','フェンタ','ヒドロモルフォン','タペンタ','トラマドール','トラマール','アンペック','オプソ','ナルサス','ナルラピド','ワントラム','メサペイン'];
+const OPIOID_TITLE_RE = /医療用麻薬使用状況/;
+const OPIOID_TEMPLATE_TITLE = '＃がん性疼痛、医療用麻薬使用状況';
+const OPIOID_TEMPLATE_BODY = [
+  '　①麻薬の保管管理状況：施設で管理',
+  '　②服薬状況：今回初回介入。次回以降で評価',
+  '　③レスキューの残薬状況等：',
+  '　⑤疼痛緩和等の状況：介入時は問題なし。',
+  '　⑥継続又は増量投与による体調の変化：今回初回介入。次回以降で評価',
+  '　⑦残薬の廃棄方法：原則保険薬局へ返納するよう説明'
+];
+
+// ══════════════════════════════════════════════════════════════
+// ユーティリティ
+// ══════════════════════════════════════════════════════════════
+function uid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      resolve({ base64: dataUrl.split(',')[1], dataUrl });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function base64ToUint8Array(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function toEra(year) {
+  if (year >= 2019) return `R${year - 2018}`;
+  if (year >= 1989) return `H${year - 1988}`;
+  if (year >= 1926) return `S${year - 1925}`;
+  return String(year);
+}
+
+function convertEraInText(text) {
+  let t = text;
+  t = t.replace(/(19|20)(\d{2})年(\d{1,2})月(\d{1,2})日/g, (m, c, yy, mo, da) => `${toEra(parseInt(c + yy, 10))}.${parseInt(mo, 10)}.${parseInt(da, 10)}`);
+  t = t.replace(/(19|20)(\d{2})年(\d{1,2})月(?!\d)/g, (m, c, yy, mo) => `${toEra(parseInt(c + yy, 10))}.${parseInt(mo, 10)}`);
+  t = t.replace(/(19|20)(\d{2})年(?!\d)/g, (m, c, yy) => `${toEra(parseInt(c + yy, 10))}年`);
+  t = t.replace(/\b(19|20)(\d{2})[\/\-](\d{1,2})[\/\-](\d{1,2})\b/g, (m, c, yy, mo, da) => `${toEra(parseInt(c + yy, 10))}.${parseInt(mo, 10)}.${parseInt(da, 10)}`);
+  return t;
+}
+
+function removeBlankLines(text) {
+  return text.split('\n').filter(l => l.trim() !== '').join('\n');
+}
+
+function removeLHMarkers(text) {
+  return text.replace(/[（(]\s*[LH]\s*[）)]/g, '');
+}
+
+function finalizeBlockText(text) {
+  return convertEraInText(removeLHMarkers(removeBlankLines(text || '')));
+}
+
+function detectOpioidInText(text) {
+  return OPIOID_KEYWORDS.some(kw => (text || '').includes(kw));
+}
+
+// ── レスポンスのパース ──
+function parseResponse(rawText) {
+  let text = (rawText || '').trim();
+
+  let knowledgeSuggestions = [];
+  const ksMatch = text.match(/★ナレッジ提案★([\s\S]*)$/);
+  if (ksMatch) {
+    text = text.slice(0, ksMatch.index).trim();
+    knowledgeSuggestions = ksMatch[1].split('\n').map(l => l.trim()).filter(l => l.startsWith('・')).map(l => l.replace(/^・/, '').trim());
+  }
+
+  let confirmItems = [];
+  const cMatch = text.match(/★確認事項★([\s\S]*)$/);
+  if (cMatch) {
+    text = text.slice(0, cMatch.index).trim();
+    confirmItems = cMatch[1].split('\n').map(l => l.trim()).filter(l => l.startsWith('・')).map(l => l.replace(/^・/, '').trim());
+  }
+
+  const blockRe = /##(S|O|A|EP|OP)##/g;
+  const matches = [];
+  let m;
+  while ((m = blockRe.exec(text))) matches.push({ key: m[1], start: m.index, contentStart: m.index + m[0].length });
+
+  if (matches.length === 0) {
+    return { parseFailed: true, rawText, confirmItems, knowledgeSuggestions };
+  }
+
+  const blocks = {};
+  for (let i = 0; i < matches.length; i++) {
+    const end = i + 1 < matches.length ? matches[i + 1].start : text.length;
+    blocks[matches[i].key] = text.slice(matches[i].contentStart, end).trim();
+  }
+
+  const requiredKeys = ['S', 'O', 'A', 'EP', 'OP'];
+  const missingCount = requiredKeys.filter(k => !(k in blocks)).length;
+  if (missingCount >= 3) {
+    return { parseFailed: true, rawText, confirmItems, knowledgeSuggestions };
+  }
+
+  return {
+    parseFailed: false,
+    sText: blocks.S || '',
+    oText: blocks.O || '',
+    aRawText: blocks.A || '',
+    epText: blocks.EP || '',
+    opText: blocks.OP || '',
+    confirmItems,
+    knowledgeSuggestions,
+    rawText
+  };
+}
+
+function splitOPProblems(opText) {
+  const visitIdx = opText.indexOf('【訪問予定】');
+  const body = (visitIdx >= 0 ? opText.slice(0, visitIdx) : opText).trim();
+  const visitText = (visitIdx >= 0 ? opText.slice(visitIdx) : '').trim();
+
+  const lines = body.split('\n');
+  const problems = [];
+  let cur = null;
+  for (const rawLine of lines) {
+    if (/^[＃#]/.test(rawLine.trim())) {
+      if (cur) problems.push(cur);
+      cur = { id: uid(), title: rawLine.trim(), bodyLines: [], checked: true };
+    } else if (cur) {
+      cur.bodyLines.push(rawLine);
+    }
+  }
+  if (cur) problems.push(cur);
+
+  problems.forEach(p => { p.isOpioidMandatory = OPIOID_TITLE_RE.test(p.title); });
+
+  return { problems, visitText };
+}
+
+function getProblemName(title) {
+  return title.replace(/^[＃#]\s*/, '').trim();
+}
+
+function computeAutoAText(aRawText, opProblems) {
+  const disabledNames = opProblems.filter(p => !p.checked && !p.isOpioidMandatory).map(p => getProblemName(p.title)).filter(Boolean);
+  if (disabledNames.length === 0) return aRawText;
+  return aRawText.split('\n').filter(line => {
+    const t = line.trim();
+    if (!/^[＃#]/.test(t)) return true;
+    return !disabledNames.some(name => t.includes(name));
+  }).join('\n');
+}
+
+function buildOPText(problems, visitText) {
+  const activeParts = problems.filter(p => p.checked || p.isOpioidMandatory)
+    .map(p => [p.title, ...p.bodyLines].join('\n').replace(/\n+$/, ''));
+  const combined = activeParts.join('\n\n');
+  if (!visitText) return combined;
+  return combined ? combined + '\n\n' + visitText : visitText;
+}
+
+function buildSystemPrompt(knowledgeDB) {
+  let prompt = SYSTEM_PROMPT_BASE + KNOWLEDGE_SUGGESTION_INSTRUCTION;
+  if (knowledgeDB && knowledgeDB.length > 0) {
+    prompt += '\n\n【蓄積ナレッジ】\n' + knowledgeDB.map(k => `・[${k.category}] [${k.drug}]：${k.content}`).join('\n');
+  }
+  return prompt;
+}
+
+function buildContentBlocks(files) {
+  const blocks = files.map(f => {
+    if (f.kind === 'pdf') {
+      return { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: f.base64 } };
+    }
+    return { type: 'image', source: { type: 'base64', media_type: f.mediaType, data: f.base64 } };
+  });
+  blocks.push({ type: 'text', text: '添付書類をもとに、新規入所患者の初回薬歴をルールに従って作成してください。' });
+  return blocks;
+}
+
+async function callClaude(apiKey, systemPrompt, files) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 4000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: buildContentBlocks(files) }]
+    })
+  });
+  if (!res.ok) {
+    let msg = `APIエラー (${res.status})`;
+    try { const err = await res.json(); msg = (err.error && err.error.message) || msg; } catch (e) {}
+    throw new Error(msg);
+  }
+  const data = await res.json();
+  return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+}
+
+function loadKnowledgeDB() {
+  try { return JSON.parse(localStorage.getItem(LS_KNOWLEDGE) || '[]'); } catch (e) { return []; }
+}
+function saveKnowledgeDBToStorage(db) {
+  try { localStorage.setItem(LS_KNOWLEDGE, JSON.stringify(db)); } catch (e) { console.error('ナレッジDB保存に失敗', e); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// UI コンポーネント
+// ══════════════════════════════════════════════════════════════
+
+function Toast({ message }) {
+  return <div className={`toast ${message ? 'show' : ''}`}>{message}</div>;
+}
+
+function SettingsPanel({ apiKey, setApiKey }) {
+  return (
+    <div className="card" style={{ padding: '14px 16px', background: '#fff8e1', border: '1px solid #f0c040' }}>
+      <div className="form-label">Claude APIキー</div>
+      <input type="password" value={apiKey} placeholder="sk-ant-... のキーを入力してください"
+        onChange={e => setApiKey(e.target.value)} />
+      <div className="text-xs text-p2 mt-8">このツールはブラウザから直接Anthropic APIを呼び出します。キーは端末内（localStorage）にのみ保存されます。</div>
+    </div>
+  );
+}
+
+function ConfirmAlertZone({ items }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div className="alert-yellow">
+      <div className="alert-yellow-title">⚠️ 確認事項</div>
+      <ul>{items.map((it, i) => <li key={i}>{it}</li>)}</ul>
+    </div>
+  );
+}
+
+function OpioidAlertBanner({ alert, onDismiss }) {
+  if (!alert) return null;
+  const text = alert.type === 'inserted'
+    ? 'オピオイド処方を検出したため「＃がん性疼痛、医療用麻薬使用状況」ブロックを自動挿入しました（算定要件）。'
+    : 'オピオイド処方が確認できません。「＃がん性疼痛、医療用麻薬使用状況」ブロックは本当に必要ですか？（自動削除はしていません。不要なら手動で編集・チェックOFFしてください）';
+  return (
+    <div className="alert-orange">
+      <span>{text}</span>
+      <button className="btn btn-ghost btn-sm" onClick={onDismiss}>閉じる</button>
+    </div>
+  );
+}
+
+function PdfViewer({ file }) {
+  const canvasRef = useRef(null);
+  const pdfRef = useRef(null);
+  const [numPages, setNumPages] = useState(0);
+  const [page, setPage] = useState(1);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPage(1);
+    setError(null);
+    pdfjsLib.getDocument({ data: base64ToUint8Array(file.base64) }).promise.then(pdf => {
+      if (cancelled) return;
+      pdfRef.current = pdf;
+      setNumPages(pdf.numPages);
+    }).catch(e => { if (!cancelled) setError('PDFの読み込みに失敗しました: ' + e.message); });
+    return () => { cancelled = true; };
+  }, [file.id]);
+
+  useEffect(() => {
+    if (!pdfRef.current || !canvasRef.current) return;
+    let cancelled = false;
+    pdfRef.current.getPage(page).then(pg => {
+      if (cancelled) return;
+      const viewport = pg.getViewport({ scale: 1.3 });
+      const canvas = canvasRef.current;
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      pg.render({ canvasContext: ctx, viewport });
+    });
+    return () => { cancelled = true; };
+  }, [page, numPages]);
+
+  if (error) return <div className="err">{error}</div>;
+
+  return (
+    <div>
+      <canvas ref={canvasRef}></canvas>
+      {numPages > 1 && (
+        <div className="pdf-nav">
+          <button className="icon-btn" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}>◀</button>
+          <span className="text-sm">{page} / {numPages}</span>
+          <button className="icon-btn" onClick={() => setPage(p => Math.min(numPages, p + 1))} disabled={page >= numPages}>▶</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SourcePane({ files, setFiles, collapsed, setCollapsed, activeFileId, setActiveFileId }) {
+  const [dragOver, setDragOver] = useState(false);
+  const inputRef = useRef(null);
+  const activeFile = files.find(f => f.id === activeFileId) || files[0];
+
+  async function handleFileList(fileList) {
+    const arr = Array.from(fileList);
+    const added = [];
+    for (const f of arr) {
+      const isPdf = f.type === 'application/pdf';
+      const isImage = f.type.startsWith('image/');
+      if (!isPdf && !isImage) continue;
+      try {
+        const { base64, dataUrl } = await readFileAsBase64(f);
+        added.push({ id: uid(), name: f.name, kind: isPdf ? 'pdf' : 'image', mediaType: f.type, base64, dataUrl });
+      } catch (e) { console.error('ファイル読み込み失敗', e); }
+    }
+    if (added.length > 0) {
+      setFiles(prev => [...prev, ...added]);
+      setActiveFileId(added[0].id);
+    }
+  }
+
+  function removeFile(id, e) {
+    e.stopPropagation();
+    setFiles(prev => prev.filter(f => f.id !== id));
+    if (activeFileId === id) setActiveFileId(null);
+  }
+
+  if (collapsed) {
+    return (
+      <div className="source-pane collapsed">
+        <div className="source-collapsed-bar" onClick={() => setCollapsed(false)}>▶ 元資料を表示</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="source-pane">
+      <div className="source-body">
+        <div className="source-header">
+          <span className="sec-label" style={{ padding: 0 }}>元資料</span>
+          <button className="btn btn-ghost btn-sm" onClick={() => setCollapsed(true)}>◀ 折りたたむ</button>
+        </div>
+
+        <div className="card" style={{ padding: 12 }}>
+          <div className={`dropzone ${dragOver ? 'over' : ''}`}
+            onClick={() => inputRef.current && inputRef.current.click()}
+            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={e => { e.preventDefault(); setDragOver(false); handleFileList(e.dataTransfer.files); }}>
+            <div className="dz-icon">📄</div>
+            <div className="dz-title">書類をドラッグ＆ドロップ</div>
+            <div className="dz-sub">またはクリックしてPDF・画像を選択（複数可）</div>
+          </div>
+          <input ref={inputRef} type="file" accept="application/pdf,image/*" multiple style={{ display: 'none' }}
+            onChange={e => { handleFileList(e.target.files); e.target.value = ''; }} />
+
+          {files.length > 0 && (
+            <div className="file-tabs mt-12">
+              {files.map(f => (
+                <div key={f.id} className={`file-tab ${activeFile && activeFile.id === f.id ? 'sel' : ''}`}
+                  onClick={() => setActiveFileId(f.id)}>
+                  <span>{f.kind === 'pdf' ? '📄' : '🖼️'} {f.name}</span>
+                  <span className="rm" onClick={e => removeFile(f.id, e)}>✕</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {activeFile && (
+          <div className="viewer-box mt-12">
+            {activeFile.kind === 'pdf'
+              ? <PdfViewer file={activeFile} />
+              : <img src={activeFile.dataUrl} alt={activeFile.name} />}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EditableBlock({ title, note, value, onChange, fixNote }) {
+  return (
+    <div className="block-card">
+      <div className="block-hd">
+        <span className="block-title">{title}</span>
+      </div>
+      {note && <div className="block-note" style={{ marginBottom: 6 }}>{note}</div>}
+      <textarea rows={title === '##S##' ? 3 : 6} value={value} onChange={e => onChange(e.target.value)} />
+      {fixNote && <div className="block-fixnote">✎ {fixNote}</div>}
+    </div>
+  );
+}
+
+function OPProblemCard({ problem, onToggle, onEdit }) {
+  const bodyText = problem.bodyLines.join('\n');
+  return (
+    <div className={`op-card ${!problem.checked && !problem.isOpioidMandatory ? 'off' : ''}`}>
+      <div className="op-card-hd">
+        {problem.isOpioidMandatory ? (
+          <span className="badge badge-req">算定要件・除外不可</span>
+        ) : (
+          <label className="sw">
+            <input type="checkbox" checked={problem.checked} onChange={e => onToggle(problem.id, e.target.checked)} />
+            <span className="sw-track"></span>
+            <span className="sw-thumb"></span>
+          </label>
+        )}
+        <span className="op-card-title">{problem.title.replace(/^[＃#]\s*/, '')}</span>
+      </div>
+      <div className="op-card-body">
+        <textarea rows={Math.max(2, bodyText.split('\n').length)} value={bodyText}
+          onChange={e => onEdit(problem.id, e.target.value.split('\n'))} />
+      </div>
+    </div>
+  );
+}
+
+function PreviewPane(props) {
+  const {
+    result, sText, setSText, oText, setOText, epText, setEpText,
+    opProblems, setOpProblems, visitText, setVisitText,
+    aRawText, aManualText, setAManualText, autoFixSummary
+  } = props;
+
+  if (!result) {
+    return (
+      <div className="card" style={{ padding: 30, textAlign: 'center', color: 'var(--p2)' }}>
+        書類をアップロードして「▶ 薬歴を生成」を押してください
+      </div>
+    );
+  }
+
+  if (result.parseFailed) {
+    return (
+      <div className="block-card">
+        <div className="block-hd"><span className="block-title">生成結果（構造の自動判定に失敗しました。全文を編集・コピーできます）</span></div>
+        <textarea rows={24} value={result.rawText} onChange={e => props.setFallbackText(e.target.value)} />
+      </div>
+    );
+  }
+
+  const effectiveAText = aManualText !== null ? aManualText : computeAutoAText(aRawText, opProblems);
+  const isAAuto = aManualText === null;
+
+  function toggleProblem(id, checked) {
+    setOpProblems(prev => prev.map(p => p.id === id ? { ...p, checked } : p));
+  }
+  function editProblem(id, bodyLines) {
+    setOpProblems(prev => prev.map(p => p.id === id ? { ...p, bodyLines } : p));
+  }
+
+  return (
+    <div>
+      <EditableBlock title="##S##" note="※訪問時に本人・家族の発言を記入" value={sText} onChange={setSText} />
+      <EditableBlock title="##O##" value={oText} onChange={setOText}
+        fixNote={autoFixSummary.O} />
+      <div className="block-card">
+        <div className="block-hd">
+          <span className="block-title">##A##</span>
+          {isAAuto ? <span className="text-xs text-p2">OPのチェックに連動（自動）</span> : <span className="block-manual-badge">手動編集中</span>}
+        </div>
+        <textarea rows={4} value={effectiveAText} onChange={e => setAManualText(e.target.value)} />
+        {autoFixSummary.A && <div className="block-fixnote">✎ {autoFixSummary.A}</div>}
+      </div>
+      <EditableBlock title="##EP##" value={epText} onChange={setEpText} fixNote={autoFixSummary.EP} />
+
+      <div className="block-card">
+        <div className="block-hd"><span className="block-title">##OP##</span></div>
+        {opProblems.map(p => (
+          <OPProblemCard key={p.id} problem={p} onToggle={toggleProblem} onEdit={editProblem} />
+        ))}
+        <div className="form-group" style={{ marginTop: 10 }}>
+          <div className="form-label">【訪問予定】</div>
+          <textarea rows={3} value={visitText} onChange={e => setVisitText(e.target.value)} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KnowledgeSuggestionCard({ suggestions, onAdd, onSkip }) {
+  if (!suggestions || suggestions.length === 0) return null;
+  return (
+    <div className="ks-card">
+      <div className="ks-card-title">💡 今回の症例から蓄積すべき薬学的知見（提案）</div>
+      {suggestions.map((s, i) => {
+        const m = s.match(/^\[(.+?)\]\s*\[(.+?)\]\s*[：:]\s*(.*)$/);
+        const category = m ? m[1] : 'その他';
+        const drug = m ? m[2] : '';
+        const content = m ? m[3] : s;
+        return (
+          <div className="ks-item" key={i}>
+            <div>{s}</div>
+            <div className="ks-item-actions">
+              <button className="btn btn-primary btn-sm" onClick={() => onAdd({ category, drug, content })}>追加する</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => onSkip(i)}>スキップ</button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function KnowledgeManagerModal({ db, onClose, onUpdate }) {
+  const [category, setCategory] = useState('');
+  const [drug, setDrug] = useState('');
+  const [content, setContent] = useState('');
+
+  function addManual() {
+    if (!content.trim()) return;
+    const newDB = [...db, { id: uid(), category: category.trim() || 'その他', drug: drug.trim(), content: content.trim(), addedAt: new Date().toISOString() }];
+    onUpdate(newDB);
+    setCategory(''); setDrug(''); setContent('');
+  }
+  function removeItem(id) {
+    onUpdate(db.filter(k => k.id !== id));
+  }
+  function updateItem(id, field, value) {
+    onUpdate(db.map(k => k.id === id ? { ...k, [field]: value } : k));
+  }
+
+  return (
+    <div className="overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal">
+        <div className="modal-hd">
+          <span className="modal-title">蓄積ナレッジの管理</span>
+          <button className="icon-btn" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="form-group">
+            <div className="form-label">新規追加</div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <input type="text" placeholder="カテゴリ（例：オピオイド）" value={category} onChange={e => setCategory(e.target.value)} />
+              <input type="text" placeholder="薬剤名（任意）" value={drug} onChange={e => setDrug(e.target.value)} />
+            </div>
+            <textarea rows={2} placeholder="内容" value={content} onChange={e => setContent(e.target.value)} />
+            <button className="btn btn-primary btn-sm mt-8" onClick={addManual}>＋ 追加</button>
+          </div>
+          <hr style={{ border: 'none', borderTop: '1px solid var(--sep)', margin: '16px 0' }} />
+          <div className="form-label">登録済み（{db.length}件）</div>
+          {db.length === 0 && <div className="text-sm text-p2">まだ登録がありません</div>}
+          {db.map(k => (
+            <div className="kd-item" key={k.id}>
+              <div className="kd-item-hd">
+                <div style={{ flex: 1 }}>
+                  <div><span className="kd-tag">[{k.category}]</span> <span className="kd-drug">{k.drug}</span></div>
+                  <textarea rows={2} style={{ marginTop: 6 }} value={k.content} onChange={e => updateItem(k.id, 'content', e.target.value)} />
+                </div>
+                <button className="btn-danger btn-sm" onClick={() => removeItem(k.id)}>削除</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CopyBar({ result, opProblems, excludedCount, onCopy }) {
+  if (!result) return null;
+  return (
+    <div className="copy-bar">
+      <button className="btn btn-primary" onClick={() => onCopy('ALL')}>📋 全文コピー</button>
+      {!result.parseFailed && ['S', 'O', 'A', 'EP', 'OP'].map(k => (
+        <button key={k} className="btn btn-secondary btn-sm" onClick={() => onCopy(k)}>{k}</button>
+      ))}
+      {excludedCount > 0 && <span className="excluded-note">{excludedCount}項目除外中</span>}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// App root
+// ══════════════════════════════════════════════════════════════
+function App() {
+  const [apiKey, setApiKeyState] = useState(() => localStorage.getItem(LS_API_KEY) || '');
+  const [showSettings, setShowSettings] = useState(() => !localStorage.getItem(LS_API_KEY));
+
+  const [files, setFiles] = useState([]);
+  const [activeFileId, setActiveFileId] = useState(null);
+  const [sourceCollapsed, setSourceCollapsed] = useState(false);
+  const [mobileTab, setMobileTab] = useState('source');
+
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [genError, setGenError] = useState(null);
+
+  const [result, setResult] = useState(null);
+  const [sText, setSText] = useState('');
+  const [oText, setOText] = useState('');
+  const [epText, setEpText] = useState('');
+  const [aRawText, setARawText] = useState('');
+  const [aManualText, setAManualText] = useState(null);
+  const [opProblems, setOpProblems] = useState([]);
+  const [visitText, setVisitText] = useState('');
+  const [opioidAlert, setOpioidAlert] = useState(null);
+  const [autoFixSummary, setAutoFixSummary] = useState({});
+  const [knowledgeSuggestions, setKnowledgeSuggestions] = useState([]);
+
+  const [knowledgeDB, setKnowledgeDB] = useState(() => loadKnowledgeDB());
+  const [showKnowledgePanel, setShowKnowledgePanel] = useState(false);
+
+  const [toast, setToast] = useState('');
+  const toastTimer = useRef(null);
+
+  function setApiKey(v) {
+    setApiKeyState(v);
+    try { localStorage.setItem(LS_API_KEY, v); } catch (e) {}
+  }
+
+  function showToast(msg) {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), 2200);
+  }
+
+  function updateKnowledgeDB(newDB) {
+    setKnowledgeDB(newDB);
+    saveKnowledgeDBToStorage(newDB);
+  }
+
+  async function handleGenerate() {
+    setGenError(null);
+    if (!apiKey.trim()) { setGenError('Claude APIキーを入力してください（右上「設定」）。'); setShowSettings(true); return; }
+    if (files.length === 0) { setGenError('PDFまたは画像をアップロードしてください。'); return; }
+    if (result && !confirm('既に生成結果があります。再生成すると現在の編集内容は上書きされます。続けますか？')) return;
+
+    setIsGenerating(true);
+    try {
+      const systemPrompt = buildSystemPrompt(knowledgeDB);
+      const raw = await callClaude(apiKey.trim(), systemPrompt, files);
+      const parsed = parseResponse(raw);
+      applyParsedResult(parsed);
+    } catch (e) {
+      setGenError('生成に失敗しました：' + e.message);
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  function applyParsedResult(parsed) {
+    setResult(parsed);
+    setKnowledgeSuggestions(parsed.knowledgeSuggestions || []);
+
+    if (parsed.parseFailed) {
+      setSText(''); setOText(''); setEpText(''); setARawText(''); setAManualText(null);
+      setOpProblems([]); setVisitText(''); setOpioidAlert(null); setAutoFixSummary({});
+      return;
+    }
+
+    setSText(parsed.sText);
+    setOText(parsed.oText);
+    setEpText(parsed.epText);
+    setARawText(parsed.aRawText);
+    setAManualText(null);
+
+    const { problems, visitText: vt } = splitOPProblems(parsed.opText);
+    setVisitText(vt);
+
+    const opioidDetected = detectOpioidInText(parsed.oText);
+    const hasOpioidBlock = problems.some(p => p.isOpioidMandatory);
+    let alert = null;
+    let finalProblems = problems;
+    if (opioidDetected && !hasOpioidBlock) {
+      finalProblems = [{ id: uid(), title: OPIOID_TEMPLATE_TITLE, bodyLines: OPIOID_TEMPLATE_BODY, checked: true, isOpioidMandatory: true }, ...problems];
+      alert = { type: 'inserted' };
+    } else if (!opioidDetected && hasOpioidBlock) {
+      alert = { type: 'unexpected' };
+    }
+    setOpProblems(finalProblems);
+    setOpioidAlert(alert);
+
+    const fixes = {};
+    ['sText', 'oText', 'epText'].forEach(() => {});
+    const checkFix = (label, txt) => {
+      const notes = [];
+      if (/\n\n/.test(txt)) notes.push('空行を除去しました');
+      if (/[（(]\s*[LH]\s*[）)]/.test(txt)) notes.push('（L）（H）表記を除去しました');
+      if (/(19|20)\d{2}[年\/\-]/.test(txt)) notes.push('西暦を元号表記に変換しました');
+      return notes.length ? notes.join('／') : null;
+    };
+    fixes.O = checkFix('O', parsed.oText);
+    fixes.A = checkFix('A', parsed.aRawText);
+    fixes.EP = checkFix('EP', parsed.epText);
+    setAutoFixSummary(fixes);
+  }
+
+  function setFallbackText(v) {
+    setResult(prev => ({ ...prev, rawText: v }));
+  }
+
+  const excludedCount = opProblems.filter(p => !p.checked && !p.isOpioidMandatory).length;
+
+  function buildFinalFullText() {
+    const opFinal = buildOPText(opProblems, visitText);
+    const aFinal = aManualText !== null ? aManualText : computeAutoAText(aRawText, opProblems);
+    const parts = [
+      ['S', sText], ['O', oText], ['A', aFinal], ['EP', epText], ['OP', opFinal]
+    ].map(([k, v]) => `##${k}##\n${finalizeBlockText(v)}`);
+    return parts.join('\n\n\n');
+  }
+
+  function buildBlockText(key) {
+    if (key === 'OP') return `##OP##\n${finalizeBlockText(buildOPText(opProblems, visitText))}`;
+    if (key === 'A') return `##A##\n${finalizeBlockText(aManualText !== null ? aManualText : computeAutoAText(aRawText, opProblems))}`;
+    const map = { S: sText, O: oText, EP: epText };
+    return `##${key}##\n${finalizeBlockText(map[key])}`;
+  }
+
+  async function handleCopy(target) {
+    if (result && result.parseFailed) {
+      const t = convertEraInText(removeLHMarkers(result.rawText));
+      await navigator.clipboard.writeText(t);
+      showToast('コピーしました');
+      return;
+    }
+    const text = target === 'ALL' ? buildFinalFullText() : buildBlockText(target);
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast(target === 'ALL' ? '全文をコピーしました' : `${target}をコピーしました`);
+    } catch (e) {
+      showToast('コピーに失敗しました');
+    }
+  }
+
+  function addKnowledgeSuggestion(item) {
+    updateKnowledgeDB([...knowledgeDB, { id: uid(), ...item, addedAt: new Date().toISOString() }]);
+    setKnowledgeSuggestions(prev => prev.filter(s => s !== `[${item.category}] [${item.drug}]：${item.content}`));
+    showToast('ナレッジに追加しました');
+  }
+  function skipKnowledgeSuggestion(idx) {
+    setKnowledgeSuggestions(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  const settingsStatus = apiKey ? 'APIキー ✅' : 'APIキー ❌';
+
+  return (
+    <div className="app-root">
+      <nav className="nav">
+        <span className="nav-title">📋 初回薬歴作成支援</span>
+        <div className="flex-c gap-8">
+          <span className="text-xs text-p2">{settingsStatus}</span>
+          <button className="icon-btn" title="ナレッジ管理" onClick={() => setShowKnowledgePanel(true)}>🧠</button>
+          <button className="icon-btn" title="設定" onClick={() => setShowSettings(s => !s)}>⚙️</button>
+        </div>
+      </nav>
+
+      <div className="content">
+        {showSettings && <div className="mt-12"><SettingsPanel apiKey={apiKey} setApiKey={setApiKey} /></div>}
+
+        <div className="mt-12">
+          <ConfirmAlertZone items={result && !result.parseFailed ? result.confirmItems : []} />
+          <OpioidAlertBanner alert={opioidAlert} onDismiss={() => setOpioidAlert(null)} />
+          {genError && <div className="err">⚠️ {genError}</div>}
+        </div>
+
+        <div className="card" style={{ padding: 14 }}>
+          <button className="btn btn-primary btn-full" onClick={handleGenerate} disabled={isGenerating}>
+            {isGenerating ? <span className="flex-c gap-8" style={{ justifyContent: 'center' }}><span className="spin"></span> 書類を読み取っています…</span> : '▶ 薬歴を生成'}
+          </button>
+        </div>
+
+        <div className="mobile-tabs">
+          <button className={`mobile-tab-btn ${mobileTab === 'source' ? 'sel' : ''}`} onClick={() => setMobileTab('source')}>📄 資料</button>
+          <button className={`mobile-tab-btn ${mobileTab === 'preview' ? 'sel' : ''}`} onClick={() => setMobileTab('preview')}>📝 薬歴</button>
+        </div>
+
+        <div className={`main-layout tab-${mobileTab}`}>
+          <SourcePane files={files} setFiles={setFiles} collapsed={sourceCollapsed} setCollapsed={setSourceCollapsed}
+            activeFileId={activeFileId} setActiveFileId={setActiveFileId} />
+          <div className="preview-pane">
+            <PreviewPane
+              result={result}
+              sText={sText} setSText={setSText}
+              oText={oText} setOText={setOText}
+              epText={epText} setEpText={setEpText}
+              aRawText={aRawText} aManualText={aManualText} setAManualText={setAManualText}
+              opProblems={opProblems} setOpProblems={setOpProblems}
+              visitText={visitText} setVisitText={setVisitText}
+              autoFixSummary={autoFixSummary}
+              setFallbackText={setFallbackText}
+            />
+            <KnowledgeSuggestionCard suggestions={knowledgeSuggestions} onAdd={addKnowledgeSuggestion} onSkip={skipKnowledgeSuggestion} />
+          </div>
+        </div>
+      </div>
+
+      <CopyBar result={result} opProblems={opProblems} excludedCount={excludedCount} onCopy={handleCopy} />
+
+      {showKnowledgePanel && (
+        <KnowledgeManagerModal db={knowledgeDB} onClose={() => setShowKnowledgePanel(false)} onUpdate={updateKnowledgeDB} />
+      )}
+
+      <Toast message={toast} />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<script>
+(function () {
+  const src = document.getElementById('app-source').textContent;
+  const out = Babel.transform(src, { presets: [['react', { runtime: 'classic' }]] }).code;
+  const s = document.createElement('script');
+  s.text = out;
+  document.body.appendChild(s);
+})();
+</script>
+</body>
+</html>
