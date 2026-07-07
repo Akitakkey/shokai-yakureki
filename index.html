@@ -601,11 +601,15 @@ function buildContentBlocks(files) {
 }
 
 async function callClaude(apiKey, systemPrompt, files) {
+  const cleanKey = apiKey.replace(/[^\x21-\x7E]/g, '');
+  if (!cleanKey) {
+    throw new Error('APIキーに使用できない文字が含まれています。設定画面でキーを入力し直してください。');
+  }
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': apiKey,
+      'x-api-key': cleanKey,
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true'
     },
@@ -1033,8 +1037,9 @@ function App() {
   const toastTimer = useRef(null);
 
   function setApiKey(v) {
-    setApiKeyState(v);
-    try { localStorage.setItem(LS_API_KEY, v); } catch (e) {}
+    const cleaned = v.replace(/[^\x21-\x7E]/g, '');
+    setApiKeyState(cleaned);
+    try { localStorage.setItem(LS_API_KEY, cleaned); } catch (e) {}
   }
 
   function showToast(msg) {
