@@ -545,6 +545,12 @@ function parseResponse(rawText) {
   };
 }
 
+function normalizeOPLine(line) {
+  const trimmed = line.replace(/^[\s　]+/, '');
+  if (!trimmed) return '';
+  return '　' + trimmed;
+}
+
 function splitOPProblems(opText) {
   const visitIdx = opText.indexOf('【訪問予定】');
   const body = (visitIdx >= 0 ? opText.slice(0, visitIdx) : opText).trim();
@@ -558,7 +564,7 @@ function splitOPProblems(opText) {
       if (cur) problems.push(cur);
       cur = { id: uid(), title: rawLine.trim(), bodyLines: [], checked: true };
     } else if (cur) {
-      cur.bodyLines.push(rawLine);
+      cur.bodyLines.push(normalizeOPLine(rawLine));
     }
   }
   if (cur) problems.push(cur);
