@@ -626,7 +626,14 @@ async function callClaude(apiKey, systemPrompt, files) {
     throw new Error(msg);
   }
   const data = await res.json();
-  return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+  const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+  if (!text.trim()) {
+    if (data.stop_reason === 'refusal') {
+      throw new Error('AIが安全フィルターにより生成を拒否しました（stop_reason: refusal）。添付内容を見直すか、時間を置いて再度お試しください。');
+    }
+    throw new Error(`AIから本文が返されませんでした（stop_reason: ${data.stop_reason || '不明'}）。`);
+  }
+  return text;
 }
 
 function loadKnowledgeDB() {
