@@ -1057,6 +1057,12 @@ function App() {
     setGenError(null);
     if (!apiKey.trim()) { setGenError('Claude APIキーを入力してください（右上「設定」）。'); setShowSettings(true); return; }
     if (files.length === 0) { setGenError('PDFまたは画像をアップロードしてください。'); return; }
+    const totalBytes = files.reduce((sum, f) => sum + Math.ceil((f.base64 || '').length * 3 / 4), 0);
+    const MAX_BYTES = 28 * 1024 * 1024;
+    if (totalBytes > MAX_BYTES) {
+      setGenError(`添付ファイルの合計サイズが大きすぎます（約${(totalBytes / 1024 / 1024).toFixed(1)}MB、上限目安28MB）。PDFを分割してページ数を減らすか、スキャン画像の解像度・圧縮率を下げてから再度お試しください。`);
+      return;
+    }
     if (result && !confirm('既に生成結果があります。再生成すると現在の編集内容は上書きされます。続けますか？')) return;
 
     setIsGenerating(true);
