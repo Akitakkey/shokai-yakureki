@@ -425,7 +425,9 @@ const SYSTEM_PROMPT_BASE = `あなたは施設在宅専門の高度な薬学的�
 
 ■ ##A##
 ##OP##で扱うプロブレムごとに、薬学的アセスメントを1プロブレム1行で記載する。
-書式：＃プロブレム名：アセスメント内容（病状・治療方針の妥当性、薬学的に着目すべき点を1〜2文で簡潔に）
+書式：＃プロブレム名　　アセスメント内容（病状・治療方針の妥当性、薬学的に着目すべき点を1〜2文で簡潔に）
+・プロブレム名とアセスメント内容の区切りは【全角スペース2つ】。「：」で区切ってはならない。
+　例：＃抗凝固療法（リクシアナ）　　DVT予防目的と推測されるが、出血リスクとの兼ね合いを要観察。
 ・行頭の「＃プロブレム名」は##OP##側の＃行と同一の文言にすること
 　（表記が一致しないと画面上のOP連動表示が崩れるため厳守）。
 ・改行のみで区切り、空行を入れない。
@@ -477,6 +479,29 @@ OPの最後に以下を付ける：
 　⑦残薬の廃棄方法：原則保険薬局へ返納するよう説明
 
 ※③は空欄のまま出力（訪問時に記入）。④は存在しない（欠番のまま）。
+※これは加算の算定要件であり、絶対に省略しない。
+
+════════════════════════
+【在宅中心静脈栄養（TPN）使用患者への必須追加項目】
+════════════════════════
+処方に高カロリー輸液（中心静脈栄養）製剤（エルネオパ・フルカリック・ネオパレン・
+ピーエヌツイン・ミキシッド・ハイカリック・アミノトリパ・ユニカリック等）が
+含まれる場合、OPの該当＃の直後に以下の形で必ず挿入する：
+
+＃在宅中心静脈栄養使用中
+　①輸液製剤の投与状況：「薬品名」を1本/24hで使用
+　②保管管理状況：居室で密閉暗所で管理
+　③残薬の状況：次回の輸液配薬まで残あることを確認
+　④栄養状態等の状況：大きな問題になるようなことは無し。
+　⑤輸液製剤による体調の変化：特になし
+　⑥薬剤の配合変化：単味であり問題なし
+
+※①の「薬品名」は実際の製剤名（規格・号数まで）に置き換える。
+　投与本数・投与時間も資料から読み取れる場合はその内容に直す。
+※②〜⑥は【初回時の既定値】である。資料に別の記載がある場合は資料の内容を優先し、
+　既定値を上書きすること。資料に記載が無い項目だけ上記の文言のまま出力する。
+※末梢静脈栄養の製剤（ビーフリード・パレプラス・アミノフリード・ツインパル等）は
+　対象外。このブロックを出力しない。
 ※これは加算の算定要件であり、絶対に省略しない。
 
 ════════════════════════
@@ -559,6 +584,25 @@ const OPIOID_TEMPLATE_BODY = [
   '　⑤疼痛緩和等の状況：介入時は問題なし。',
   '　⑥継続又は増量投与による体調の変化：今回初回介入。次回以降で評価',
   '　⑦残薬の廃棄方法：原則保険薬局へ返納するよう説明'
+];
+
+// 在宅中心静脈栄養（TPN）。オピオイドと同じく算定要件なので、AIが書き漏らしたら
+// アプリ側で補う。末梢静脈栄養（ビーフリード・パレプラス・アミノフリード・
+// ツインパル等）は対象外なのでキーワードに入れない。
+// ★製剤名の追加・削除はこの配列だけ直せばよい。
+const TPN_KEYWORDS = ['エルネオパ','フルカリック','ネオパレン','ピーエヌツイン','ミキシッド','ハイカリック','アミノトリパ','ユニカリック'];
+const TPN_TITLE_RE = /在宅中心静脈栄養/;
+const TPN_TEMPLATE_TITLE = '＃在宅中心静脈栄養使用中';
+// ①の「薬品名」はアプリ側では埋められない（製剤名は資料を読まないと分からない）。
+// AIが出力すれば実際の製剤名が入る。ここはAIが書き漏らしたときの穴埋め用なので、
+// プレースホルダのまま残して手入力を促す。②〜⑥はあくまで初回時の既定値。
+const TPN_TEMPLATE_BODY = [
+  '　①輸液製剤の投与状況：「薬品名」を1本/24hで使用',
+  '　②保管管理状況：居室で密閉暗所で管理',
+  '　③残薬の状況：次回の輸液配薬まで残あることを確認',
+  '　④栄養状態等の状況：大きな問題になるようなことは無し。',
+  '　⑤輸液製剤による体調の変化：特になし',
+  '　⑥薬剤の配合変化：単味であり問題なし'
 ];
 
 // ══════════════════════════════════════════════════════════════
@@ -859,6 +903,10 @@ function detectOpioidInText(text) {
   return OPIOID_KEYWORDS.some(kw => (text || '').includes(kw));
 }
 
+function detectTpnInText(text) {
+  return TPN_KEYWORDS.some(kw => (text || '').includes(kw));
+}
+
 // ── レスポンスのパース ──
 function parseResponse(rawText) {
   let text = (rawText || '').trim();
@@ -935,7 +983,13 @@ function splitOPProblems(opText) {
   }
   if (cur) problems.push(cur);
 
-  problems.forEach(p => { p.isOpioidMandatory = OPIOID_TITLE_RE.test(p.title); });
+  // 算定要件のブロック（麻薬・TPN）はチェックを外して除外できないようにする。
+  // 種別ごとのフラグも残す（どちらが入っているかで警告の文面を変えるため）。
+  problems.forEach(p => {
+    p.isOpioidMandatory = OPIOID_TITLE_RE.test(p.title);
+    p.isTpnMandatory = TPN_TITLE_RE.test(p.title);
+    p.isMandatory = p.isOpioidMandatory || p.isTpnMandatory;
+  });
 
   return { problems, visitText };
 }
@@ -945,7 +999,7 @@ function getProblemName(title) {
 }
 
 function computeAutoAText(aRawText, opProblems) {
-  const disabledNames = opProblems.filter(p => !p.checked && !p.isOpioidMandatory).map(p => getProblemName(p.title)).filter(Boolean);
+  const disabledNames = opProblems.filter(p => !p.checked && !p.isMandatory).map(p => getProblemName(p.title)).filter(Boolean);
   if (disabledNames.length === 0) return aRawText;
   return aRawText.split('\n').filter(line => {
     const t = line.trim();
@@ -955,7 +1009,7 @@ function computeAutoAText(aRawText, opProblems) {
 }
 
 function buildOPText(problems, visitText) {
-  const activeParts = problems.filter(p => p.checked || p.isOpioidMandatory)
+  const activeParts = problems.filter(p => p.checked || p.isMandatory)
     .map(p => [p.title, ...p.bodyLines].join('\n').replace(/\n+$/, ''));
   const combined = activeParts.join('\n\n');
   if (!visitText) return combined;
@@ -1385,14 +1439,32 @@ function ConfirmAlertZone({ items }) {
   );
 }
 
-function OpioidAlertBanner({ alert, onDismiss }) {
-  if (!alert) return null;
-  const text = alert.type === 'inserted'
-    ? 'オピオイド処方を検出したため「＃がん性疼痛、医療用麻薬使用状況」ブロックを自動挿入しました（算定要件）。'
-    : 'オピオイド処方が確認できません。「＃がん性疼痛、医療用麻薬使用状況」ブロックは本当に必要ですか？（自動削除はしていません。不要なら手動で編集・チェックOFFしてください）';
+// 算定要件ブロック（麻薬・TPN）の自動挿入／要確認をまとめて出すバナー。
+const MANDATORY_ALERT_TEXT = {
+  opioid: {
+    label: 'オピオイド処方',
+    block: '「＃がん性疼痛、医療用麻薬使用状況」'
+  },
+  tpn: {
+    label: '中心静脈栄養（高カロリー輸液）の処方',
+    block: '「＃在宅中心静脈栄養使用中」'
+  }
+};
+
+function MandatoryAlertBanner({ alerts, onDismiss }) {
+  if (!alerts || alerts.length === 0) return null;
   return (
     <div className="alert-orange">
-      <span>{text}</span>
+      <span>
+        {alerts.map((a, i) => {
+          const t = MANDATORY_ALERT_TEXT[a.kind];
+          if (!t) return null;
+          const text = a.type === 'inserted'
+            ? `${t.label}を検出したため${t.block}ブロックを自動挿入しました（算定要件）。`
+            : `${t.label}が確認できません。${t.block}ブロックは本当に必要ですか？（自動削除はしていません。不要なら手動で編集・チェックOFFしてください）`;
+          return <div key={i}>{text}</div>;
+        })}
+      </span>
       <button className="btn btn-ghost btn-sm" onClick={onDismiss}>閉じる</button>
     </div>
   );
@@ -1547,9 +1619,9 @@ function EditableBlock({ title, note, value, onChange, fixNote }) {
 function OPProblemCard({ problem, onToggle, onEdit }) {
   const bodyText = problem.bodyLines.join('\n');
   return (
-    <div className={`op-card ${!problem.checked && !problem.isOpioidMandatory ? 'off' : ''}`}>
+    <div className={`op-card ${!problem.checked && !problem.isMandatory ? 'off' : ''}`}>
       <div className="op-card-hd">
-        {problem.isOpioidMandatory ? (
+        {problem.isMandatory ? (
           <span className="badge badge-req">算定要件・除外不可</span>
         ) : (
           <label className="chk">
@@ -1746,7 +1818,7 @@ function App() {
   const [aManualText, setAManualText] = useState(null);
   const [opProblems, setOpProblems] = useState([]);
   const [visitText, setVisitText] = useState('');
-  const [opioidAlert, setOpioidAlert] = useState(null);
+  const [mandatoryAlerts, setMandatoryAlerts] = useState([]);
   const [autoFixSummary, setAutoFixSummary] = useState({});
   const [knowledgeSuggestions, setKnowledgeSuggestions] = useState([]);
 
@@ -2155,18 +2227,30 @@ function App() {
     const { problems, visitText: vt } = splitOPProblems(parsed.opText);
     setVisitText(vt);
 
-    const opioidDetected = detectOpioidInText(parsed.oText);
-    const hasOpioidBlock = problems.some(p => p.isOpioidMandatory);
-    let alert = null;
+    // 算定要件ブロック（麻薬・TPN）の自動挿入と警告。
+    // 判定は同じ形なので1つのテーブルにまとめて回す。
+    const MANDATORY_SPECS = [
+      { kind: 'opioid', detect: detectOpioidInText, has: p => p.isOpioidMandatory,
+        title: OPIOID_TEMPLATE_TITLE, body: OPIOID_TEMPLATE_BODY, flag: 'isOpioidMandatory' },
+      { kind: 'tpn', detect: detectTpnInText, has: p => p.isTpnMandatory,
+        title: TPN_TEMPLATE_TITLE, body: TPN_TEMPLATE_BODY, flag: 'isTpnMandatory' }
+    ];
+    const alerts = [];
     let finalProblems = problems;
-    if (opioidDetected && !hasOpioidBlock) {
-      finalProblems = [{ id: uid(), title: OPIOID_TEMPLATE_TITLE, bodyLines: OPIOID_TEMPLATE_BODY, checked: true, isOpioidMandatory: true }, ...problems];
-      alert = { type: 'inserted' };
-    } else if (!opioidDetected && hasOpioidBlock) {
-      alert = { type: 'unexpected' };
-    }
+    MANDATORY_SPECS.forEach(spec => {
+      const detected = spec.detect(parsed.oText);
+      const hasBlock = finalProblems.some(spec.has);
+      if (detected && !hasBlock) {
+        const inserted = { id: uid(), title: spec.title, bodyLines: spec.body, checked: true, isMandatory: true };
+        inserted[spec.flag] = true;
+        finalProblems = [inserted, ...finalProblems];
+        alerts.push({ kind: spec.kind, type: 'inserted' });
+      } else if (!detected && hasBlock) {
+        alerts.push({ kind: spec.kind, type: 'unexpected' });
+      }
+    });
     setOpProblems(finalProblems);
-    setOpioidAlert(alert);
+    setMandatoryAlerts(alerts);
 
     const fixes = {};
     ['sText', 'oText', 'epText'].forEach(() => {});
@@ -2187,7 +2271,7 @@ function App() {
     setResult(prev => ({ ...prev, rawText: v }));
   }
 
-  const excludedCount = opProblems.filter(p => !p.checked && !p.isOpioidMandatory).length;
+  const excludedCount = opProblems.filter(p => !p.checked && !p.isMandatory).length;
 
   function buildFinalFullText() {
     const opFinal = buildOPText(opProblems, visitText);
@@ -2254,7 +2338,7 @@ function App() {
 
         <div className="mt-12">
           <ConfirmAlertZone items={result && !result.parseFailed ? result.confirmItems : []} />
-          <OpioidAlertBanner alert={opioidAlert} onDismiss={() => setOpioidAlert(null)} />
+          <MandatoryAlertBanner alerts={mandatoryAlerts} onDismiss={() => setMandatoryAlerts([])} />
           {genError && <div className="err">⚠️ {genError}</div>}
         </div>
 
