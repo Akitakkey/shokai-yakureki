@@ -256,7 +256,12 @@ textarea:focus,input:focus{border-color:var(--blue);box-shadow:0 0 0 3.5px rgba(
 .mask-phase .file-tab.sel .rm:hover{background:rgba(255,255,255,.3);color:#fff;}
 
 /* マスク編集キャンバス */
-.mask-canvas-wrap{position:relative;display:inline-block;max-width:100%;user-select:none;line-height:0;}
+/* PDFは1ページが画面幅いっぱい（最大1348px）に出て縦に長くなりすぎるため、
+   表示幅を半分程度に抑える。マスク枠・ペンの座標は全て％で保持し、ペンの太さも
+   実測した表示幅（dispW）から換算しているので、表示サイズを変えてもズレない。
+   canvas自体の解像度（MASK_RENDER_SCALE）は下げていない＝OCR精度と
+   送信画像の画質はそのまま。 */
+.mask-canvas-wrap{position:relative;display:inline-block;max-width:min(680px,100%);user-select:none;line-height:0;}
 .mask-canvas-wrap canvas{display:block;max-width:100%;height:auto;border-radius:8px;
   box-shadow:0 1px 6px rgba(0,0,0,.12);}
 .mask-overlay{position:absolute;inset:0;cursor:crosshair;}
