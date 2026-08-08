@@ -146,6 +146,23 @@ textarea:focus,input:focus{border-color:var(--blue);box-shadow:0 0 0 3.5px rgba(
 .badge-req{background:rgba(255,149,0,.15);color:#95610a;}
 .badge-warn{background:rgba(255,59,48,.12);color:#c0392b;}
 
+/* 算定点数＋加算 */
+.point-card{padding:14px;}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+.chip{padding:7px 14px;border:2px solid var(--blue);border-radius:20px;background:transparent;
+  color:var(--blue);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;}
+.chip:hover{background:rgba(0,122,255,.08);}
+.chip.sel{background:var(--blue);color:#fff;}
+.chip-note{font-size:10px;font-weight:400;opacity:.75;margin-left:5px;}
+/* 加算は基本点数と区別するためオレンジ系にする */
+.chip-kasan{border-color:#c2703a;color:#c2703a;}
+.chip-kasan:hover{background:rgba(194,112,58,.1);}
+.chip-kasan.sel{background:#c2703a;color:#fff;}
+.point-total{margin-top:10px;font-size:13px;font-weight:700;color:var(--blue);
+  background:rgba(0,122,255,.08);border-radius:8px;padding:7px 10px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.point-total.none{color:var(--p2);font-weight:400;background:rgba(120,120,128,.12);}
+
 /* ===== Layout: 3 zones ===== */
 .main-layout{display:flex;gap:16px;align-items:flex-start;}
 .source-pane{flex:0 0 38%;min-width:0;position:sticky;top:70px;max-height:calc(100vh - 90px);
@@ -605,6 +622,36 @@ const TPN_TEMPLATE_BODY = [
   '　⑥薬剤の配合変化：単味であり問題なし'
 ];
 
+// ── 算定点数と加算 ──
+// このアプリは居宅の初回も施設の初回も扱うので、基本点数は4つ全部を出す。
+// 加算のONは点数に足すだけでなく、OPへの必須＃ブロック挿入の発火点にもなる。
+// ★点数を変えるときはこの2つの定義だけ直せばよい。
+const BASE_POINTS = [
+  { value: 518, note: '介護' },
+  { value: 650, note: '医療' },
+  { value: 342, note: '施設・介護' },
+  { value: 320, note: '施設・医療' }
+];
+const KASAN_DEFS = {
+  opioid: { label: '麻薬', points: 100 },
+  tpn   : { label: 'TPN',  points: 150 }
+};
+
+// 例: { base:518, kasan:{opioid:true} } → '518点＋麻薬100点'
+function pointsLabel(base, kasan) {
+  if (!base) return '';
+  const parts = [`${base}点`];
+  Object.keys(KASAN_DEFS).forEach(k => {
+    if (kasan[k]) parts.push(`${KASAN_DEFS[k].label}${KASAN_DEFS[k].points}点`);
+  });
+  return parts.join('＋');
+}
+
+function pointsSum(base, kasan) {
+  if (!base) return 0;
+  return Object.keys(KASAN_DEFS).reduce((a, k) => a + (kasan[k] ? KASAN_DEFS[k].points : 0), base);
+}
+
 // ══════════════════════════════════════════════════════════════
 // ユーティリティ
 // ══════════════════════════════════════════════════════════════
@@ -983,15 +1030,59 @@ function splitOPProblems(opText) {
   }
   if (cur) problems.push(cur);
 
-  // 算定要件のブロック（麻薬・TPN）はチェックを外して除外できないようにする。
-  // 種別ごとのフラグも残す（どちらが入っているかで警告の文面を変えるため）。
-  problems.forEach(p => {
-    p.isOpioidMandatory = OPIOID_TITLE_RE.test(p.title);
-    p.isTpnMandatory = TPN_TITLE_RE.test(p.title);
-    p.isMandatory = p.isOpioidMandatory || p.isTpnMandatory;
+  // 除外不可（isMandatory）の印は加算のON/OFFで変わるので、ここでは付けない。
+  // 直後に必ず syncMandatoryBlocks() を通す。
+  return { problems, visitText };
+}
+
+// ── 算定要件の必須＃ブロック（麻薬・TPN）を加算のON/OFFに合わせる ──
+// 発火点は薬剤名の検出ではなく、加算ボタンのON。
+// ・加算ON  かつ ＃が無い → 先頭に挿入し、除外不可にする
+// ・加算OFF かつ アプリが入れた＃がある → 引っ込める
+// ・加算OFF かつ AIが出した＃がある → 消さずに残す（ただの＃として扱い、チェックで除外可能）
+const MANDATORY_SPECS = [
+  { kind: 'opioid', titleRe: OPIOID_TITLE_RE, title: OPIOID_TEMPLATE_TITLE, body: OPIOID_TEMPLATE_BODY, flagKey: 'isOpioidMandatory' },
+  { kind: 'tpn',    titleRe: TPN_TITLE_RE,    title: TPN_TEMPLATE_TITLE,    body: TPN_TEMPLATE_BODY,    flagKey: 'isTpnMandatory' }
+];
+
+function syncMandatoryBlocks(problems, kasan) {
+  let out = problems.slice();
+  const inserted = [];
+
+  MANDATORY_SPECS.forEach(spec => {
+    const on  = !!kasan[spec.kind];
+    const idx = out.findIndex(p => spec.titleRe.test(p.title));
+    if (on && idx < 0) {
+      out = [{ id: uid(), title: spec.title, bodyLines: spec.body, checked: true, autoInserted: spec.kind }, ...out];
+      inserted.push(spec.kind);
+    } else if (!on && idx >= 0 && out[idx].autoInserted === spec.kind) {
+      out = out.filter((_, i) => i !== idx);
+    }
   });
 
-  return { problems, visitText };
+  out = out.map(p => {
+    const next = { ...p, isMandatory: false };
+    MANDATORY_SPECS.forEach(spec => {
+      next[spec.flagKey] = spec.titleRe.test(p.title) && !!kasan[spec.kind];
+      if (next[spec.flagKey]) next.isMandatory = true;
+    });
+    return next;
+  });
+
+  return { problems: out, inserted };
+}
+
+// 加算ボタンと処方内容の食い違いを警告する。あくまで注意喚起で、勝手に加算を切り替えたりはしない。
+function checkKasanMismatch(oText, kasan) {
+  const detectors = { opioid: detectOpioidInText, tpn: detectTpnInText };
+  const alerts = [];
+  MANDATORY_SPECS.forEach(spec => {
+    const on = !!kasan[spec.kind];
+    const detected = detectors[spec.kind](oText);
+    if (!on && detected) alerts.push({ kind: spec.kind, type: 'missing' });
+    else if (on && !detected) alerts.push({ kind: spec.kind, type: 'noDrug' });
+  });
+  return alerts;
 }
 
 function getProblemName(title) {
@@ -1442,10 +1533,12 @@ function ConfirmAlertZone({ items }) {
 // 算定要件ブロック（麻薬・TPN）の自動挿入／要確認をまとめて出すバナー。
 const MANDATORY_ALERT_TEXT = {
   opioid: {
+    kasan: '麻薬加算',
     label: 'オピオイド処方',
     block: '「＃がん性疼痛、医療用麻薬使用状況」'
   },
   tpn: {
+    kasan: 'TPN加算',
     label: '中心静脈栄養（高カロリー輸液）の処方',
     block: '「＃在宅中心静脈栄養使用中」'
   }
@@ -1459,9 +1552,14 @@ function MandatoryAlertBanner({ alerts, onDismiss }) {
         {alerts.map((a, i) => {
           const t = MANDATORY_ALERT_TEXT[a.kind];
           if (!t) return null;
-          const text = a.type === 'inserted'
-            ? `${t.label}を検出したため${t.block}ブロックを自動挿入しました（算定要件）。`
-            : `${t.label}が確認できません。${t.block}ブロックは本当に必要ですか？（自動削除はしていません。不要なら手動で編集・チェックOFFしてください）`;
+          let text;
+          if (a.type === 'inserted') {
+            text = `${t.kasan}がONのため${t.block}ブロックを自動挿入しました（算定要件）。`;
+          } else if (a.type === 'missing') {
+            text = `${t.label}がありますが${t.kasan}がOFFです。算定漏れではありませんか？`;
+          } else {
+            text = `${t.kasan}がONですが${t.label}が確認できません。加算のON/OFFをご確認ください。`;
+          }
           return <div key={i}>{text}</div>;
         })}
       </span>
@@ -1781,6 +1879,41 @@ function KnowledgeManagerModal({ db, onClose, onUpdate }) {
   );
 }
 
+// 算定点数＋加算。加算のONで麻薬・TPNの＃ブロックがOPに入る。
+function PointBar({ basePoint, setBasePoint, kasan, onToggleKasan, onCopy }) {
+  const label = pointsLabel(basePoint, kasan);
+  return (
+    <div className="card point-card">
+      <div className="form-label">算定点数</div>
+      <div className="chips">
+        {BASE_POINTS.map(b => (
+          <button key={b.value}
+            className={`chip ${basePoint === b.value ? 'sel' : ''}`}
+            onClick={() => setBasePoint(basePoint === b.value ? null : b.value)}>
+            {b.value}点<span className="chip-note">{b.note}</span>
+          </button>
+        ))}
+      </div>
+      <div className="form-label" style={{ marginTop: 10 }}>
+        加算<span className="text-xs text-p2" style={{ marginLeft: 6 }}>ONにするとOPに算定要件の＃が入ります</span>
+      </div>
+      <div className="chips">
+        {Object.keys(KASAN_DEFS).map(k => (
+          <button key={k}
+            className={`chip chip-kasan ${kasan[k] ? 'sel' : ''}`}
+            onClick={() => onToggleKasan(k)}>
+            {KASAN_DEFS[k].label} +{KASAN_DEFS[k].points}点
+          </button>
+        ))}
+      </div>
+      <div className={`point-total ${label ? '' : 'none'}`}>
+        <span>{label ? `${label}　＝　合計 ${pointsSum(basePoint, kasan)}点` : '算定点数を選択してください'}</span>
+        {label && <button className="btn btn-secondary btn-sm" onClick={() => onCopy(label)}>📋 コピー</button>}
+      </div>
+    </div>
+  );
+}
+
 function CopyBar({ result, opProblems, excludedCount, onCopy }) {
   if (!result) return null;
   return (
@@ -1819,6 +1952,8 @@ function App() {
   const [opProblems, setOpProblems] = useState([]);
   const [visitText, setVisitText] = useState('');
   const [mandatoryAlerts, setMandatoryAlerts] = useState([]);
+  const [basePoint, setBasePoint] = useState(null);
+  const [kasan, setKasan] = useState({ opioid: false, tpn: false });
   const [autoFixSummary, setAutoFixSummary] = useState({});
   const [knowledgeSuggestions, setKnowledgeSuggestions] = useState([]);
 
@@ -1844,6 +1979,23 @@ function App() {
   const maskPdfDocCache = useRef({});
 
   const maskActiveFile = maskFiles.find(f => f.id === maskActiveFileId) || null;
+
+  // 生成中に加算を押し替えられても取り違えないよう、常に最新の加算をrefで持っておく。
+  const kasanRef = useRef(kasan);
+  kasanRef.current = kasan;
+
+  // 加算のトグル。ONにした時点で＃ブロックの有無を追従させる（生成後に押し直しても効く）。
+  function toggleKasan(key) {
+    const next = { ...kasan, [key]: !kasan[key] };
+    setKasan(next);
+    if (opProblems.length === 0) return;
+    const synced = syncMandatoryBlocks(opProblems, next);
+    setOpProblems(synced.problems);
+    setMandatoryAlerts([
+      ...synced.inserted.map(k => ({ kind: k, type: 'inserted' })),
+      ...checkKasanMismatch(oText, next)
+    ]);
+  }
 
   // ページごとのOCR単語枠（デバッグ表示用）をその場で組み立てる。
   // showDebugWordsがオフの間は計算しない。
@@ -2214,7 +2366,7 @@ function App() {
 
     if (parsed.parseFailed) {
       setSText(''); setOText(''); setEpText(''); setARawText(''); setAManualText(null);
-      setOpProblems([]); setVisitText(''); setOpioidAlert(null); setAutoFixSummary({});
+      setOpProblems([]); setVisitText(''); setMandatoryAlerts([]); setAutoFixSummary({});
       return;
     }
 
@@ -2227,30 +2379,15 @@ function App() {
     const { problems, visitText: vt } = splitOPProblems(parsed.opText);
     setVisitText(vt);
 
-    // 算定要件ブロック（麻薬・TPN）の自動挿入と警告。
-    // 判定は同じ形なので1つのテーブルにまとめて回す。
-    const MANDATORY_SPECS = [
-      { kind: 'opioid', detect: detectOpioidInText, has: p => p.isOpioidMandatory,
-        title: OPIOID_TEMPLATE_TITLE, body: OPIOID_TEMPLATE_BODY, flag: 'isOpioidMandatory' },
-      { kind: 'tpn', detect: detectTpnInText, has: p => p.isTpnMandatory,
-        title: TPN_TEMPLATE_TITLE, body: TPN_TEMPLATE_BODY, flag: 'isTpnMandatory' }
-    ];
-    const alerts = [];
-    let finalProblems = problems;
-    MANDATORY_SPECS.forEach(spec => {
-      const detected = spec.detect(parsed.oText);
-      const hasBlock = finalProblems.some(spec.has);
-      if (detected && !hasBlock) {
-        const inserted = { id: uid(), title: spec.title, bodyLines: spec.body, checked: true, isMandatory: true };
-        inserted[spec.flag] = true;
-        finalProblems = [inserted, ...finalProblems];
-        alerts.push({ kind: spec.kind, type: 'inserted' });
-      } else if (!detected && hasBlock) {
-        alerts.push({ kind: spec.kind, type: 'unexpected' });
-      }
-    });
-    setOpProblems(finalProblems);
-    setMandatoryAlerts(alerts);
+    // 算定要件ブロック（麻薬・TPN）は加算ボタンのON/OFFで決まる。
+    // 薬剤名の検出は発火点ではなく、加算の付け忘れ・付けすぎを知らせる注意喚起にだけ使う。
+    const k = kasanRef.current;
+    const synced = syncMandatoryBlocks(problems, k);
+    setOpProblems(synced.problems);
+    setMandatoryAlerts([
+      ...synced.inserted.map(kind => ({ kind, type: 'inserted' })),
+      ...checkKasanMismatch(parsed.oText, k)
+    ]);
 
     const fixes = {};
     ['sText', 'oText', 'epText'].forEach(() => {});
@@ -2463,6 +2600,12 @@ function App() {
 
         {phase === 'result' && (
           <>
+            <PointBar basePoint={basePoint} setBasePoint={setBasePoint} kasan={kasan} onToggleKasan={toggleKasan}
+              onCopy={async label => {
+                try { await navigator.clipboard.writeText(label); showToast('点数をコピーしました'); }
+                catch (e) { showToast('コピーに失敗しました'); }
+              }} />
+
             <div className="card" style={{ padding: 14 }}>
               <button className="btn btn-primary btn-full" onClick={() => handleGenerate()} disabled={isGenerating}>
                 {isGenerating ? <span className="flex-c gap-8" style={{ justifyContent: 'center' }}><span className="spin"></span> 生成中…</span> : '▶ 薬歴を生成'}
