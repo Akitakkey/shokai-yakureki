@@ -980,8 +980,32 @@ function buildContentBlocks(files) {
   return blocks;
 }
 
-async function callClaudeOnce(cleanKey, systemPrompt, messages, onDelta, textSoFar) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+// claude-sonnet-5 は「考える（thinking）」が既定でONになっている。
+// 思考に使ったトークンも max_tokens に含まれるため、複雑な症例だと
+// 16000トークンを思考だけで使い切り、本文を1文字も出さないまま打ち切られる
+// （stop_reason: max_tokens で本文が空）。しかも Sonnet 5 は思考の内容を
+// 流さない設定が既定なので、画面は「生成中」のまま無音で固まる。
+// → 明示的にOFFにして、出力枠を全部本文に使わせる。
+// 万一このモデルが thinking 指定を受け付けなくなったときに全滅しないよう
+// （temperature で同じ事故を起こした前例あり）、弾かれたら外して投げ直す。
+let _thinkingParamOk = true;
+
+function buildRequestBody(systemPrompt, messages, withThinking) {
+  const body = {
+    model: MODEL,
+    max_tokens: 16000,
+    stream: true,
+    system: [
+      { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }
+    ],
+    messages
+  };
+  if (withThinking) body.thinking = { type: 'disabled' };
+  return body;
+}
+
+function postMessages(cleanKey, body) {
+  return fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -989,20 +1013,30 @@ async function callClaudeOnce(cleanKey, systemPrompt, messages, onDelta, textSoF
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true'
     },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 16000,
-      stream: true,
-      system: [
-        { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }
-      ],
-      messages
-    })
+    body: JSON.stringify(body)
   });
+}
+
+async function callClaudeOnce(cleanKey, systemPrompt, messages, onDelta, textSoFar) {
+  let res = await postMessages(cleanKey, buildRequestBody(systemPrompt, messages, _thinkingParamOk));
+
   if (!res.ok) {
-    let msg = `APIエラー (${res.status})`;
-    try { const err = await res.json(); msg = (err.error && err.error.message) || msg; } catch (e) {}
-    throw new Error(msg);
+    let errBody = '';
+    try { errBody = await res.text(); } catch (e) {}
+    // thinking 指定そのものを拒否されたときだけ、外して1回だけ投げ直す
+    if (res.status === 400 && _thinkingParamOk && /thinking/i.test(errBody)) {
+      _thinkingParamOk = false;
+      res = await postMessages(cleanKey, buildRequestBody(systemPrompt, messages, false));
+      if (!res.ok) {
+        errBody = '';
+        try { errBody = await res.text(); } catch (e) {}
+      }
+    }
+    if (!res.ok) {
+      let msg = `APIエラー (${res.status})`;
+      try { const err = JSON.parse(errBody); msg = (err.error && err.error.message) || msg; } catch (e) {}
+      throw new Error(msg);
+    }
   }
 
   const reader = res.body.getReader();
@@ -1059,6 +1093,9 @@ async function callClaude(apiKey, systemPrompt, files, onDelta) {
     if (!text.trim()) {
       if (stopReason === 'refusal') {
         throw new Error('AIが安全フィルターにより生成を拒否しました（stop_reason: refusal）。添付内容を見直すか、時間を置いて再度お試しください。');
+      }
+      if (stopReason === 'max_tokens') {
+        throw new Error('AIが本文を出力する前に出力上限に達しました（stop_reason: max_tokens）。添付書類を減らして分割で作成するか、時間を置いて再度お試しください。');
       }
       throw new Error(`AIから本文が返されませんでした（stop_reason: ${stopReason || '不明'}）。`);
     }
