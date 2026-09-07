@@ -463,11 +463,13 @@ const SYSTEM_PROMPT_BASE = `あなたは施設在宅専門の高度な薬学的�
 プロブレム別（＃）に記載する。＃の行以外（各要素の行）は行頭に全角スペース1つを入れ、
 ＃より1段字下げして書く（＃がん性疼痛、医療用麻薬使用状況ブロックは後述の指定書式のまま）。
 
-＃プロブレム名は【疾患名ベース】で簡潔に記載する（例：＃高血圧症、＃尿路感染症（既往）、
-＃アルツハイマー型認知症）。「＃◯◯治療」「＃◯◯療法」のように治療行為や薬剤名を
-＃名に含めてはならない。治療内容・薬剤名・経過は下の本文側に記載する。
-現在も治療継続中なら状態を付けず疾患名のみ、既に終了し経過観察のみの既往なら
-「（既往）」を付ける。
+＃プロブレム名は疾患名のみを記載する（例：＃高血圧症、＃アルツハイマー型認知症）。
+治療中は疾患名だけ、既に終了し経過観察のみの既往は「（既往）」を付ける
+（例：＃尿路感染症（既往））。＃名に使える括弧はこの「（既往）」だけであり、
+薬剤名・治療法・投与方法などそれ以外の情報を括弧に入れてはならない。
+　NG例：＃難治性腹水（利尿薬・アルブミン）／＃低ナトリウム血症（塩化ナトリウム内服）
+　OK例：＃難治性腹水／＃低ナトリウム血症
+治療内容・薬剤名・経過は＃名ではなく、下の本文側に記載する。
 疾患名は元資料に記載された診断名・傷病名をそのまま用いること。資料に確定診断の
 記載が無く、処方薬や症状から疾患名を推測しないと＃名を作れない場合は、病名を
 断定せず「＃尿路感染症疑い」「＃発熱（原因精査中）」のように症状・疑い病名の形に
@@ -1028,6 +1030,28 @@ function normalizeOPLine(line) {
   return '　' + trimmed;
 }
 
+// ＃名に使える括弧は「（既往）」だけ。プロンプトで禁止しても治療薬・治療法を
+// 括弧に入れて出力してくることがあるため、機械的に削除する（既往以外の末尾括弧を除去）。
+// OP側のtitleとA側（aRawText）の＃名の両方に同じ処理をかけないと、
+// computeAutoAText の名前照合（getProblemNameベースの部分一致）がズレて崩れる。
+function sanitizeProblemTitle(title) {
+  return title.replace(/[（(]([^）)]*)[）)]\s*$/, (whole, inner) => inner === '既往' ? whole : '').trim();
+}
+
+// 1つの＃ブロック内に★〜★が2組以上出力された場合、最初の★〜最後の★までを
+// 1組の★〜★に統合する（中間の★マーカーだけ除去し、文章はそのまま残す）。
+// プロンプトで「★は1個」と指示しても、薬学的チェックポイントが複数該当する
+// 複雑な症例では守られないことがあるため、生成後に機械的に強制する。
+function mergeStarBlocks(text) {
+  const positions = [];
+  for (let i = 0; i < text.length; i++) if (text[i] === '★') positions.push(i);
+  if (positions.length < 4) return text;
+  const first = positions[0];
+  const last = positions[positions.length - 1];
+  const middle = text.slice(first + 1, last).split('★').join('');
+  return text.slice(0, first) + '★' + middle + '★' + text.slice(last + 1);
+}
+
 function splitOPProblems(opText) {
   const visitIdx = opText.indexOf('【訪問予定】');
   const body = (visitIdx >= 0 ? opText.slice(0, visitIdx) : opText).trim();
@@ -1039,16 +1063,31 @@ function splitOPProblems(opText) {
   for (const rawLine of lines) {
     if (/^[＃#]/.test(rawLine.trim())) {
       if (cur) problems.push(cur);
-      cur = { id: uid(), title: rawLine.trim(), bodyLines: [], checked: true };
+      cur = { id: uid(), title: sanitizeProblemTitle(rawLine.trim()), bodyLines: [], checked: true };
     } else if (cur) {
       cur.bodyLines.push(normalizeOPLine(rawLine));
     }
   }
   if (cur) problems.push(cur);
 
+  problems.forEach(p => {
+    p.bodyLines = mergeStarBlocks(p.bodyLines.join('\n')).split('\n');
+  });
+
   // 除外不可（isMandatory）の印は加算のON/OFFで変わるので、ここでは付けない。
   // 直後に必ず syncMandatoryBlocks() を通す。
   return { problems, visitText };
+}
+
+// A側（aRawText）の各行は「＃プロブレム名　　アセスメント内容」（全角スペース2つ区切り）。
+// ＃名部分だけ sanitizeProblemTitle と同じ既往ルールで揃え、OP側との名前照合を保つ。
+function sanitizeARawText(aRawText) {
+  return aRawText.split('\n').map(line => {
+    if (!/^[＃#]/.test(line.trim())) return line;
+    const idx = line.indexOf('　　');
+    if (idx < 0) return sanitizeProblemTitle(line);
+    return sanitizeProblemTitle(line.slice(0, idx)) + line.slice(idx);
+  }).join('\n');
 }
 
 // ── 算定要件の必須＃ブロック（麻薬・TPN）を加算のON/OFFに合わせる ──
@@ -2389,7 +2428,7 @@ function App() {
     setSText(parsed.sText);
     setOText(parsed.oText);
     setEpText(parsed.epText);
-    setARawText(parsed.aRawText);
+    setARawText(sanitizeARawText(parsed.aRawText));
     setAManualText(null);
 
     const { problems, visitText: vt } = splitOPProblems(parsed.opText);
